@@ -77,6 +77,8 @@ class AliceBob(Node):
         self.bob_angles = []
         self.alice_E91_results = []
         self.bob_E91_results = []
+        self.final_key_alice = []
+        self.final_key_bob = []
 
         self.detector = CDetector(name=f"{self.name}.detector", timeline=self.timeline)
         self.detector.owner = self
@@ -250,13 +252,13 @@ class HybridBB84E91():
             k = (a, b)
             return corr[k] / counts[k] if counts.get(k, 0) > 0 else 0.0
 
-        # S = E(0°,45°) − E(0°,135°) + E(90°,45°) + E(90°,135°)
+        
         S = (
-    E(0,45)
-    - E(0,135)
-    + E(90,45)
-    + E(90,135)
-)
+            E(0,45)
+            - E(0,135)
+            + E(90,45)
+            + E(90,135)
+            )
         return abs(S)
 
     # ── Steps 17–22: Parameter Estimation + Abort ────────────────────────────
@@ -286,38 +288,6 @@ class HybridBB84E91():
 
         return not abort, remaining_alice, remaining_bob
 
-    # ──  Error Correction (simplified Cascade, one pass) ─────────
-    # def error_correction(self, alice_key, bob_key):
-    #     print("\n=== Error Correction (Cascade / binary search) ===")
-    #     n = min(len(alice_key), len(bob_key))
-    #     alice_key = list(alice_key[:n])
-    #     bob_key   = list(bob_key[:n])
-
-    #     BLOCK_SIZE      = 8
-    #     leak_bits       = 0
-    #     errors_corrected = 0
-
-    #     for blk in range(0, n, BLOCK_SIZE):
-    #         end = min(blk + BLOCK_SIZE, n)
-    #         a_par = sum(alice_key[blk:end]) % 2
-    #         b_par = sum(bob_key[blk:end])   % 2
-    #         leak_bits += 1  # one parity bit announced per block
-
-    #         if a_par != b_par:
-    #             # Binary search within the block to locate the single error
-    #             lo, hi = blk, end
-    #             while hi - lo > 1:
-    #                 mid = (lo + hi) // 2
-    #                 if sum(alice_key[lo:mid]) % 2 != sum(bob_key[lo:mid]) % 2:
-    #                     hi = mid
-    #                 else:
-    #                     lo = mid
-    #                 leak_bits += 1  # each bisection reveals one parity bit
-    #             bob_key[lo] ^= 1
-    #             errors_corrected += 1
-
-    #     print(f"  Key length: {n} bits  |  Errors corrected: {errors_corrected}  |  Bits leaked: {leak_bits}")
-    #     return alice_key, bob_key, leak_bits
 
     # ──  Privacy Amplification ──────────────────────────────────
     def privacy_amplification(self, key, leak_bits, epsilon_PA=1e-10):
@@ -373,11 +343,12 @@ class HybridBB84E91():
         secure, alice_key, bob_key = self.parameter_estimation()
         if not secure:
             return None
-
-        # alice_key, bob_key, leak_bits = self.error_correction(alice_key, bob_key)
-        # print(alice_key==bob_key)
-        final_key = self.privacy_amplification(alice_key, 0)
-        return final_key
+        
+        final_key_alice = self.privacy_amplification(alice_key, 0)
+        final_key_bob   = self.privacy_amplification(bob_key, 0)
+        self.alice.final_key_alice = final_key_alice
+        self.bob.final_key_bob = final_key_bob
+        return final_key_alice, final_key_bob
 
 
 # ─── Setup ───────────────────────────────────────────────────────────────────
@@ -393,31 +364,32 @@ cc_ba.set_ends(bob,   alice.name)
 channel.set_ends(alice, bob.name)
 
 # ─── Run simulation ──────────────────────────────────────────────────────────
+
+rounds = 1000
+
 hnew = HybridBB84E91(0.8, alice, bob, tl)
-for i in range(1000):
+for i in range(rounds):
     hnew.start(i)
 
 tl.init()
 tl.run()
+
+
+
+
 
 # ─── Protocol phases ─────────────────────────────────────────────────────────
 print("\n=== Sifting ===")
 hnew.sifting()
 print(f"  Matched BB84 bits: {len(alice.alice_BB84_results)}")
 
-final_key = hnew.run_full_protocol()
+final_key_alice, final_key_bob = hnew.run_full_protocol()
 
-# ─── Step 28: Output ─────────────────────────────────────────────────────────
-print("\n=== Final Secret Key K ===")
-if final_key:
-    preview = ''.join(map(str, final_key[:64]))
-    ellipsis = '...' if len(final_key) > 64 else ''
-    print(f"  Length : {len(final_key)} bits")
-    print(f"  Key K  : {preview}{ellipsis}")
-else:
-    print("  Protocol aborted — no secret key generated.")
 
 
 print("\n=== Summary of Results ===")
-# print(alice.alice_BB84_results)
-# print(bob.bob_BB84_results)
+preview_alice = ''.join(map(str, final_key_alice[:64]))
+ellipsis = '...' if len(final_key_alice) > 64 else ''
+preview_bob   = ''.join(map(str, final_key_bob[:64]))
+print(f"  Final Key (Alice): {preview_alice}{ellipsis}")
+print(f"  Final Key (Bob)  : {preview_bob}{ellipsis}")
