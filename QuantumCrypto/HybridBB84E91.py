@@ -41,7 +41,7 @@ def apply_rotation(qm, k1, k2, theta, target):
     qm.set([k1, k2], new_state)
 
 class CDetector(Detector):
-    def __init__(self, name, timeline, efficiency=0.9, dark_count=0, count_rate=25000000, time_resolution=150):
+    def __init__(self, name, timeline, efficiency=1, dark_count=0, count_rate=25000000, time_resolution=150):
         super().__init__(name, timeline, efficiency, dark_count, count_rate, time_resolution)
 
     def get(self, photon: Photon, **__):
@@ -205,7 +205,7 @@ class HybridBB84E91():
         self.bob.bob_E91_results.append(result[self.bob.memories[-1].qstate_key])
         self.e91counter += 1
 
-    # ── Step 14–16: Sifting ──────────────────────────────────────────────────
+    # ── Step Sifting ──────────────────────────────────────────────────
     def sifting(self):
         bob_len = len(self.bob.bob_basis_list)
         for i in range(len(self.alice.alice_basis_list)):
@@ -215,7 +215,7 @@ class HybridBB84E91():
                 self.alice.alice_BB84_results.append(self.alice.alice_bit_list[i])
                 self.bob.bob_BB84_results.append(self.bob.bob_bit_list[i])
 
-    # ── Step 18: QBER from BB84 sample ──────────────────────────────────────
+    # ──  QBER from BB84 sample ──────────────────────────────────────
     def _estimate_qber(self):
         alice_bits = self.alice.alice_BB84_results
         bob_bits   = self.bob.bob_BB84_results
@@ -231,7 +231,7 @@ class HybridBB84E91():
         remaining_bob   = [bob_bits[i]   for i in range(n) if i not in sample_idx]
         return qber, remaining_alice, remaining_bob
 
-    # ── Step 19: CHSH S from E91 rounds (Eq. 3) ─────────────────────────────
+    # ── CHSH S from E91 rounds  ─────────────────────────────
     def _compute_chsh(self):
         corr   = {}
         counts = {}
@@ -261,7 +261,7 @@ class HybridBB84E91():
 
     # ── Steps 17–22: Parameter Estimation + Abort ────────────────────────────
     def parameter_estimation(self, qber_threshold=0.11, chsh_threshold=2.0):
-        print("\n=== Step 17–22: Parameter Estimation ===")
+        print("\n=== Parameter Estimation ===")
         print(f"  BB84 rounds: {self.bb84counter}  |  E91 rounds: {self.e91counter}")
 
         qber, remaining_alice, remaining_bob = self._estimate_qber()
@@ -286,46 +286,46 @@ class HybridBB84E91():
 
         return not abort, remaining_alice, remaining_bob
 
-    # ── Steps 23–24: Error Correction (simplified Cascade, one pass) ─────────
-    def error_correction(self, alice_key, bob_key):
-        print("\n=== Steps 23–24: Error Correction (Cascade / binary search) ===")
-        n = min(len(alice_key), len(bob_key))
-        alice_key = list(alice_key[:n])
-        bob_key   = list(bob_key[:n])
+    # ──  Error Correction (simplified Cascade, one pass) ─────────
+    # def error_correction(self, alice_key, bob_key):
+    #     print("\n=== Error Correction (Cascade / binary search) ===")
+    #     n = min(len(alice_key), len(bob_key))
+    #     alice_key = list(alice_key[:n])
+    #     bob_key   = list(bob_key[:n])
 
-        BLOCK_SIZE      = 8
-        leak_bits       = 0
-        errors_corrected = 0
+    #     BLOCK_SIZE      = 8
+    #     leak_bits       = 0
+    #     errors_corrected = 0
 
-        for blk in range(0, n, BLOCK_SIZE):
-            end = min(blk + BLOCK_SIZE, n)
-            a_par = sum(alice_key[blk:end]) % 2
-            b_par = sum(bob_key[blk:end])   % 2
-            leak_bits += 1  # one parity bit announced per block
+    #     for blk in range(0, n, BLOCK_SIZE):
+    #         end = min(blk + BLOCK_SIZE, n)
+    #         a_par = sum(alice_key[blk:end]) % 2
+    #         b_par = sum(bob_key[blk:end])   % 2
+    #         leak_bits += 1  # one parity bit announced per block
 
-            if a_par != b_par:
-                # Binary search within the block to locate the single error
-                lo, hi = blk, end
-                while hi - lo > 1:
-                    mid = (lo + hi) // 2
-                    if sum(alice_key[lo:mid]) % 2 != sum(bob_key[lo:mid]) % 2:
-                        hi = mid
-                    else:
-                        lo = mid
-                    leak_bits += 1  # each bisection reveals one parity bit
-                bob_key[lo] ^= 1
-                errors_corrected += 1
+    #         if a_par != b_par:
+    #             # Binary search within the block to locate the single error
+    #             lo, hi = blk, end
+    #             while hi - lo > 1:
+    #                 mid = (lo + hi) // 2
+    #                 if sum(alice_key[lo:mid]) % 2 != sum(bob_key[lo:mid]) % 2:
+    #                     hi = mid
+    #                 else:
+    #                     lo = mid
+    #                 leak_bits += 1  # each bisection reveals one parity bit
+    #             bob_key[lo] ^= 1
+    #             errors_corrected += 1
 
-        print(f"  Key length: {n} bits  |  Errors corrected: {errors_corrected}  |  Bits leaked: {leak_bits}")
-        return alice_key, bob_key, leak_bits
+    #     print(f"  Key length: {n} bits  |  Errors corrected: {errors_corrected}  |  Bits leaked: {leak_bits}")
+    #     return alice_key, bob_key, leak_bits
 
-    # ── Steps 25–27: Privacy Amplification ──────────────────────────────────
+    # ──  Privacy Amplification ──────────────────────────────────
     def privacy_amplification(self, key, leak_bits, epsilon_PA=1e-10):
         """
         Compress key to ℓ ≤ H_min(X^n|E) − leak_EC − 2·log(1/ε_PA) bits
         using a SHA-256-based universal hash.
         """
-        print("\n=== Steps 25–27: Privacy Amplification ===")
+        print("\n=== Privacy Amplification ===")
         n = len(key)
         if n == 0:
             print("  Warning: No key bits to amplify.")
@@ -374,8 +374,9 @@ class HybridBB84E91():
         if not secure:
             return None
 
-        alice_key, bob_key, leak_bits = self.error_correction(alice_key, bob_key)
-        final_key = self.privacy_amplification(alice_key, leak_bits)
+        # alice_key, bob_key, leak_bits = self.error_correction(alice_key, bob_key)
+        # print(alice_key==bob_key)
+        final_key = self.privacy_amplification(alice_key, 0)
         return final_key
 
 
@@ -400,14 +401,14 @@ tl.init()
 tl.run()
 
 # ─── Protocol phases ─────────────────────────────────────────────────────────
-print("\n=== Steps 13–16: Sifting ===")
+print("\n=== Sifting ===")
 hnew.sifting()
 print(f"  Matched BB84 bits: {len(alice.alice_BB84_results)}")
 
 final_key = hnew.run_full_protocol()
 
 # ─── Step 28: Output ─────────────────────────────────────────────────────────
-print("\n=== Step 28: Final Secret Key K ===")
+print("\n=== Final Secret Key K ===")
 if final_key:
     preview = ''.join(map(str, final_key[:64]))
     ellipsis = '...' if len(final_key) > 64 else ''
